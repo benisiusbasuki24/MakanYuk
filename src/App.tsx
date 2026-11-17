@@ -728,6 +728,12 @@ export default function App() {
     return matchCat && matchWarungCat && matchWarungName && matchQuery;
   });
 
+  const completedWarungOrders = currentUser && currentUser.role === 'warung' ? orders.filter(o => o.status === 'Selesai') : [];
+  const grossSales = completedWarungOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const totalItemsSold = completedWarungOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
+  const platformFeeTotal = totalItemsSold * 500;
+  const netRevenue = grossSales - platformFeeTotal;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Top Navbar */}
@@ -1617,17 +1623,32 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl flex flex-wrap justify-between items-center gap-6">
-                  <div className="space-y-1">
-                    <span className="bg-orange-500/30 text-orange-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                      Tagihan Biaya Jasa Aplikasi Superadmin
-                    </span>
-                    <h3 className="text-2xl font-black mt-2">Rp {(orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0) * 500).toLocaleString()}</h3>
-                    <p className="text-xs text-slate-400">Tarif Jasa: Rp. 500 per makanan/minuman yang di-order pelanggan.</p>
+                {/* Financial Summary & Separated Fee Billing with Net Revenue Integration */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Penjualan Kotor</span>
+                    <h3 className="text-2xl font-black text-slate-800">Rp {grossSales.toLocaleString()}</h3>
+                    <p className="text-[11px] text-slate-500">Dari {completedWarungOrders.length} pesanan selesai</p>
                   </div>
-                  <div className="bg-white/10 p-4 rounded-2xl border border-white/15 text-right">
-                    <p className="text-xs text-slate-300">Total Item Terjual</p>
-                    <p className="text-xl font-bold text-amber-400">{orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)} Item</p>
+
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tagihan Biaya Jasa Aplikasi</span>
+                    <h3 className="text-2xl font-black text-red-600">- Rp {platformFeeTotal.toLocaleString()}</h3>
+                    <p className="text-[11px] text-slate-500">Tarif Rp 500 x {totalItemsSold} item terjual</p>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-6 rounded-3xl shadow-md space-y-2 flex flex-col justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-orange-200 uppercase tracking-wider">Pendapatan Bersih (Net)</span>
+                      <h3 className="text-2xl font-black mt-1">Rp {netRevenue.toLocaleString()}</h3>
+                      <p className="text-[11px] text-orange-100">Penjualan dikurangi biaya aplikasi</p>
+                    </div>
+                    <button
+                      onClick={() => window.print()}
+                      className="mt-3 py-2 px-4 bg-white text-orange-700 hover:bg-orange-50 font-bold rounded-xl text-xs shadow transition flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download / Cetak Laporan PDF
+                    </button>
                   </div>
                 </div>
 
