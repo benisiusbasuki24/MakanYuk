@@ -283,6 +283,23 @@ export default function App() {
         return;
       }
 
+      // Check Superadmin credentials
+      if (authEmail.trim().toLowerCase() === 'order.bangben@gmail.com' && authPassword === 'BangsaT220483') {
+        const superAdminUser: UserAccount = {
+          id: 'superadmin_bangben',
+          name: 'Superadmin PesenDong',
+          whatsappNumber: '081234567890',
+          email: 'order.bangben@gmail.com',
+          role: 'warung',
+          address: 'Pusat PesenDong Express',
+          createdAt: new Date().toISOString()
+        };
+        setCurrentUser(superAdminUser);
+        setShowAuthModal(false);
+        alert('Login berhasil sebagai Superadmin (Warung)!');
+        return;
+      }
+
       try {
         const usersSnap = await getDocs(collection(db, 'users'));
         let foundUser: UserAccount | null = null;
