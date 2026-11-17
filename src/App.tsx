@@ -204,12 +204,18 @@ export default function App() {
       });
 
       if (items.length === 0) {
-        try {
-          for (const defItem of DEFAULT_MENU) {
-            await addDoc(collection(db, 'menu'), defItem);
+        const hasInitialized = localStorage.getItem('pesendong_initialized');
+        if (!hasInitialized) {
+          localStorage.setItem('pesendong_initialized', 'true');
+          try {
+            for (const defItem of DEFAULT_MENU) {
+              await addDoc(collection(db, 'menu'), defItem);
+            }
+          } catch (err) {
+            console.error("Error seeding default menu:", err);
           }
-        } catch (err) {
-          console.error("Error seeding default menu:", err);
+        } else {
+          setMenuItems([]);
         }
       } else {
         setMenuItems(items);
@@ -1282,7 +1288,88 @@ export default function App() {
                     <span className="text-xs text-slate-500">Pembaruan otomatis real-time</span>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  {/* Mobile View: Cards */}
+                  <div className="block md:hidden space-y-4">
+                    {orders.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400 text-sm">Belum ada pesanan masuk.</div>
+                    ) : (
+                      orders.map((o) => (
+                        <div key={o.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                          <div className="flex justify-between items-start pb-2 border-b border-slate-200">
+                            <div>
+                              <span className="font-mono font-bold text-orange-600 text-base">{o.orderCode}</span>
+                              <div className="text-[10px] text-slate-400">
+                                {new Date(o.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={o.status}
+                                onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value as any)}
+                                className={`text-xs font-bold px-2 py-1.5 rounded-xl border ${
+                                  o.status === 'Selesai' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
+                                  o.status === 'Dibatalkan' ? 'bg-red-50 border-red-300 text-red-800' :
+                                  'bg-orange-50 border-orange-300 text-orange-800'
+                                }`}
+                              >
+                                <option value="Menunggu Konfirmasi">Menunggu Konfirmasi</option>
+                                <option value="Diproses">Diproses (Masak)</option>
+                                <option value="Dalam Pengiriman">Dalam Pengiriman</option>
+                                <option value="Selesai">Selesai</option>
+                                <option value="Dibatalkan">Dibatalkan</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="text-xs space-y-1">
+                            <p className="font-bold text-slate-800 text-sm">{o.customerName} <span className="text-slate-500 font-normal">({o.customerPhone})</span></p>
+                            <p className="text-slate-600 text-[11px] bg-white p-2 rounded-xl border border-slate-100">{o.deliveryAddress}</p>
+                          </div>
+
+                          <div className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                            <p className="font-bold text-slate-700 text-[11px]">Rincian Pesanan:</p>
+                            {o.items.map((i, idx) => (
+                              <div key={idx} className="flex justify-between text-slate-600">
+                                <span>- {i.name}</span>
+                                <span className="font-bold">x{i.quantity}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                            <div>
+                              <div className="font-black text-orange-600 text-sm">Rp {o.totalAmount.toLocaleString()}</div>
+                              <div className="text-[10px] text-slate-500">{o.paymentMethod}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={o.paymentStatus}
+                                onChange={(e) => handleUpdatePaymentStatus(o.id, e.target.value as any)}
+                                className={`text-[10px] font-bold px-2 py-1 rounded border ${
+                                  o.paymentStatus === 'Lunas' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-800'
+                                }`}
+                              >
+                                <option value="Belum Lunas">Belum Lunas</option>
+                                <option value="Lunas">Lunas</option>
+                              </select>
+                              <a 
+                                href={`https://wa.me/${o.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Halo Kak ${o.customerName}, pesanan PesenDong dengan kode *${o.orderCode}* statusnya saat ini: *${o.status}*. Terima kasih telah memesan!`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow transition"
+                                title="Kirim WhatsApp"
+                              >
+                                <Phone className="w-3.5 h-3.5" /> WA
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop View: Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-bold">
                         <tr>
