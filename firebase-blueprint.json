@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "MenuItem": {
+      "description": "Food and drink items available for customer orders",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["Makanan", "Minuman"] },
+        "price": { "type": "number" },
+        "description": { "type": "string", "maxLength": 300 },
+        "imageUrl": { "type": "string" },
+        "available": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Order": {
+      "description": "Customer food orders with real-time status and payment info",
+      "properties": {
+        "id": { "type": "string" },
+        "orderCode": { "type": "string", "maxLength": 30 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["Tunai", "Transfer Bank"] },
+        "paymentStatus": { "type": "string", "enum": ["Belum Lunas", "Lunas"] },
+        "status": { "type": "string", "enum": ["Menunggu Konfirmasi", "Diproses", "Dalam Pengiriman", "Selesai", "Dibatalkan"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "User": {
+      "description": "Customer and admin profiles with active WhatsApp numbers",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 100 },
+        "password": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["customer", "admin"] },
+        "address": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "collections": {
+      "menu": {
+        "schema": "MenuItem",
+        "description": "Public readable menu items, admin writable"
+      },
+      "orders": {
+        "schema": "Order",
+        "description": "Public creatable orders, admin readable and writable"
+      },
+      "users": {
+        "schema": "User",
+        "description": "Customer and admin accounts"
+      }
+    }
+  }
+}
