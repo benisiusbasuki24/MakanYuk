@@ -3,7 +3,7 @@ import {
   Utensils, ShoppingBag, Truck, CheckCircle2, Clock, XCircle, Plus, Minus, 
   Trash2, Edit, Save, Search, Filter, FileSpreadsheet, FileText, Download, 
   Phone, MapPin, User, ShieldCheck, DollarSign, QrCode, ArrowRight, RefreshCw, 
-  Check, AlertCircle, Image as ImageIcon, Sparkles, ChefHat, LogOut, Lock, UserPlus, Key, Settings
+  Check, AlertCircle, Image as ImageIcon, Sparkles, ChefHat, LogOut, Lock, UserPlus, Key, Settings, Store
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -55,7 +55,7 @@ export interface UserAccount {
   whatsappNumber: string;
   email: string;
   password?: string;
-  role: 'customer' | 'admin';
+  role: 'pelanggan' | 'warung';
   address: string;
   createdAt: string;
 }
@@ -120,7 +120,7 @@ const DEFAULT_MENU: Omit<MenuItem, 'id'>[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'customer' | 'tracking' | 'admin' | 'reports'>('customer');
+  const [activeTab, setActiveTab] = useState<'customer' | 'tracking' | 'warung' | 'reports'>('customer');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -130,8 +130,11 @@ export default function App() {
     const saved = localStorage.getItem('pesendong_current_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Auth Modal state (Login / Register with role selection)
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authRole, setAuthRole] = useState<'pelanggan' | 'warung'>('pelanggan');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
@@ -148,17 +151,6 @@ export default function App() {
     password: ''
   });
 
-  // Admin Login state
-  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
-  const [adminPass, setAdminPass] = useState('');
-  const [adminProfile, setAdminProfile] = useState({
-    name: 'Admin Utama PesenDong',
-    whatsappNumber: '081234567890',
-    email: 'admin@pesendong.com',
-    password: 'admin123'
-  });
-  const [showAdminProfileModal, setShowAdminProfileModal] = useState(false);
-
   // Customer Cart state
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'Transfer Bank'>('Tunai');
@@ -169,7 +161,7 @@ export default function App() {
   const [searchCode, setSearchCode] = useState('');
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
 
-  // Admin menu editing state
+  // Warung menu editing state
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
   const [isNewMenuModal, setIsNewMenuModal] = useState(false);
   const [newMenuForm, setNewMenuForm] = useState({
@@ -189,6 +181,11 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('pesendong_current_user', JSON.stringify(currentUser));
+      if (currentUser.role === 'warung') {
+        setActiveTab('warung');
+      } else {
+        setActiveTab('customer');
+      }
     } else {
       localStorage.removeItem('pesendong_current_user');
     }
@@ -241,7 +238,7 @@ export default function App() {
     };
   }, []);
 
-  // Customer Auth Handlers
+  // Auth Handlers with Role Selection
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (authMode === 'register') {
@@ -261,7 +258,7 @@ export default function App() {
           whatsappNumber: authWhatsapp.trim(),
           email: authEmail.trim(),
           password: authPassword,
-          role: 'customer',
+          role: authRole,
           address: authAddress.trim(),
           createdAt: new Date().toISOString()
         };
@@ -269,7 +266,7 @@ export default function App() {
         await setDoc(doc(db, 'users', newUser.id), newUser);
         setCurrentUser(newUser);
         setShowAuthModal(false);
-        alert('Registrasi berhasil! Selamat datang di PesenDong.');
+        alert(`Registrasi berhasil sebagai ${authRole === 'warung' ? 'Warung' : 'Pelanggan'}! Selamat datang di PesenDong.`);
       } catch (err) {
         console.error("Error registering user:", err);
         alert('Gagal registrasi. Silakan coba lagi.');
@@ -304,7 +301,7 @@ export default function App() {
     }
   };
 
-  // Update Customer Profile
+  // Update Profile
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -335,6 +332,14 @@ export default function App() {
 
   // Cart operations
   const addToCart = (item: MenuItem) => {
+    if (!currentUser || currentUser.role !== 'pelanggan') {
+      setShowAuthModal(true);
+      setAuthRole('pelanggan');
+      setAuthMode('login');
+      alert('Silakan login sebagai Pelanggan terlebih dahulu untuk memesan.');
+      return;
+    }
+
     setCart(prevCart => {
       const existingIndex = prevCart.findIndex(ci => ci.menuId === item.id);
       if (existingIndex > -1) {
@@ -375,9 +380,9 @@ export default function App() {
   // Submit Order
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) {
+    if (!currentUser || currentUser.role !== 'pelanggan') {
       setShowAuthModal(true);
-      alert('Silakan Login atau Registrasi terlebih dahulu untuk melakukan pemesanan!');
+      alert('Silakan Login sebagai Pelanggan terlebih dahulu untuk melakukan pemesanan!');
       return;
     }
     if (!currentUser.whatsappNumber || currentUser.whatsappNumber.length < 9) {
@@ -417,11 +422,11 @@ export default function App() {
       const placedOrder: Order = { id: docRef.id, ...newOrderData };
       setLastPlacedOrder(placedOrder);
 
-      // WhatsApp notification link generation
+      // WhatsApp notification link generation to Warung
       const waMessage = encodeURIComponent(
-        `Halo Admin PesenDong! Saya memesan makanan baru:\n\n` +
+        `Halo Warung PesenDong! Ada pesanan baru:\n\n` +
         `No. Pesanan: *${orderCode}*\n` +
-        `Nama: *${currentUser.name}*\n` +
+        `Nama Pelanggan: *${currentUser.name}*\n` +
         `No. WA: *${currentUser.whatsappNumber}*\n` +
         `Alamat: *${currentUser.address}*\n\n` +
         `Pesanan:\n` +
@@ -456,24 +461,6 @@ export default function App() {
       alert('Pesanan dengan kode atau nomor HP tersebut tidak ditemukan.');
       setTrackedOrder(null);
     }
-  };
-
-  // Admin Login
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPass === adminProfile.password) {
-      setAdminLoggedIn(true);
-      setAdminPass('');
-    } else {
-      alert('Password admin salah! (Gunakan: admin123)');
-    }
-  };
-
-  // Update Admin Profile
-  const handleUpdateAdminProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    setShowAdminProfileModal(false);
-    alert('Profil Admin berhasil diperbarui!');
   };
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
@@ -613,10 +600,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* Top Navbar */}
+      {/* 
+        LANDING PAGE / NOT LOGGED IN: NO NAVBAR. Only clean brand header with Login/Register trigger.
+        LOGGED IN AS PELANGGAN: Customer Navbar (Menu, Lacak Pesanan, Profile, Logout).
+        LOGGED IN AS WARUNG: Warung Navbar (Dashboard Warung, Kelola Menu, Laporan, Profile Warung, Logout).
+      */}
       <header className="bg-orange-600 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('customer')}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
+            if (currentUser?.role === 'warung') setActiveTab('warung');
+            else setActiveTab('customer');
+          }}>
             <div className="bg-white text-orange-600 p-2 rounded-2xl shadow-md">
               <Utensils className="w-7 h-7" />
             </div>
@@ -629,68 +623,50 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            <nav className="flex items-center gap-2 overflow-x-auto py-1">
-              <button 
-                onClick={() => setActiveTab('customer')}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                  activeTab === 'customer' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                }`}
-              >
-                <Utensils className="w-4 h-4" /> Menu
-              </button>
-              <button 
-                onClick={() => setActiveTab('tracking')}
-                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                  activeTab === 'tracking' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                }`}
-              >
-                <Truck className="w-4 h-4" /> Lacak Pesanan
-              </button>
+            {currentUser && currentUser.role === 'pelanggan' && (
+              <nav className="flex items-center gap-2 overflow-x-auto py-1">
+                <button 
+                  onClick={() => setActiveTab('customer')}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                    activeTab === 'customer' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
+                  }`}
+                >
+                  <Utensils className="w-4 h-4" /> Menu
+                </button>
+                <button 
+                  onClick={() => setActiveTab('tracking')}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                    activeTab === 'tracking' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
+                  }`}
+                >
+                  <Truck className="w-4 h-4" /> Lacak Pesanan
+                </button>
+              </nav>
+            )}
 
-              {!currentUser && (
-                <>
-                  <button 
-                    onClick={() => setActiveTab('admin')}
-                    className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                      activeTab === 'admin' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4" /> Admin
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('reports')}
-                    className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                      activeTab === 'reports' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-4 h-4" /> Laporan
-                  </button>
-                </>
-              )}
-              {adminLoggedIn && (
-                <>
-                  <button 
-                    onClick={() => setActiveTab('admin')}
-                    className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                      activeTab === 'admin' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4" /> Admin
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('reports')}
-                    className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
-                      activeTab === 'reports' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-4 h-4" /> Laporan
-                  </button>
-                </>
-              )}
-            </nav>
+            {currentUser && currentUser.role === 'warung' && (
+              <nav className="flex items-center gap-2 overflow-x-auto py-1">
+                <button 
+                  onClick={() => setActiveTab('warung')}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                    activeTab === 'warung' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
+                  }`}
+                >
+                  <Store className="w-4 h-4" /> Dashboard Warung
+                </button>
+                <button 
+                  onClick={() => setActiveTab('reports')}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                    activeTab === 'reports' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> Laporan Penjualan
+                </button>
+              </nav>
+            )}
 
-            {/* Customer User Profile / Auth Button */}
-            <div className="border-l border-orange-500 pl-3">
+            {/* Profile / Auth Button */}
+            <div className={`${currentUser ? 'border-l border-orange-500 pl-3' : ''}`}>
               {currentUser ? (
                 <div className="flex items-center gap-2 bg-orange-700/60 px-3 py-1.5 rounded-2xl border border-orange-500/40">
                   <div className="w-7 h-7 bg-white text-orange-600 rounded-full flex items-center justify-center font-bold text-xs shadow">
@@ -698,7 +674,7 @@ export default function App() {
                   </div>
                   <div className="hidden sm:block text-left text-xs">
                     <p className="font-bold text-white truncate max-w-[100px]">{currentUser.name}</p>
-                    <p className="text-[10px] text-orange-200">WA: {currentUser.whatsappNumber}</p>
+                    <p className="text-[10px] text-orange-200 capitalize">Role: {currentUser.role}</p>
                   </div>
                   <button
                     onClick={() => {
@@ -725,12 +701,20 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-2 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-xs font-black shadow transition flex items-center gap-1.5"
-                >
-                  <User className="w-4 h-4" /> Login / Daftar
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}
+                    className="px-4 py-2 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-xs font-black shadow transition flex items-center gap-1.5"
+                  >
+                    <User className="w-4 h-4" /> Login
+                  </button>
+                  <button
+                    onClick={() => { setAuthMode('register'); setShowAuthModal(true); }}
+                    className="px-4 py-2 bg-amber-400 text-orange-950 hover:bg-amber-300 rounded-xl text-xs font-black shadow transition flex items-center gap-1.5"
+                  >
+                    <UserPlus className="w-4 h-4" /> Register
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -746,8 +730,119 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* 1. CUSTOMER TAB */}
-            {activeTab === 'customer' && (
+            {/* 1. LANDING PAGE (WHEN NOT LOGGED IN) */}
+            {!currentUser && (
+              <div className="space-y-8 py-4">
+                {/* Landing Banner & Quick Register/Login Card */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
+                  <div className="lg:col-span-2 space-y-4">
+                    <span className="bg-white/20 text-white text-xs font-bold px-3.5 py-1 rounded-full uppercase tracking-wider">
+                      Selamat Datang di PesenDong Express
+                    </span>
+                    <h2 className="text-3xl md:text-5xl font-black leading-tight">Lapar? PesenDong Aja!</h2>
+                    <p className="text-orange-100 text-base leading-relaxed max-w-xl">
+                      Pesan makanan & minuman favoritmu dari warung terbaik secara real-time. Nikmati pengiriman cepat dan pelacakan pesanan instan.
+                    </p>
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <button
+                        onClick={() => { setAuthMode('register'); setShowAuthModal(true); }}
+                        className="px-6 py-3.5 bg-white text-orange-600 font-black rounded-2xl shadow-lg hover:bg-orange-50 transition flex items-center gap-2"
+                      >
+                        <UserPlus className="w-5 h-5" /> Daftar Akun Baru Sekarang
+                      </button>
+                      <button
+                        onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}
+                        className="px-6 py-3.5 bg-orange-700/80 hover:bg-orange-700 text-white font-black rounded-2xl shadow-lg transition flex items-center gap-2 border border-orange-400/40"
+                      >
+                        <User className="w-5 h-5" /> Login Pelanggan / Warung
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="hidden lg:flex justify-center">
+                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 text-center space-y-3">
+                      <Store className="w-16 h-16 text-white mx-auto animate-pulse" />
+                      <h3 className="text-lg font-bold">Mitra Warung & Pelanggan</h3>
+                      <p className="text-xs text-orange-100">Satu platform terintegrasi untuk pesan antar kuliner nusantara.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Landing Menu Catalog Section */}
+                <div className="space-y-4 pt-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-800">Menu Makanan & Minuman Tersedia</h3>
+                      <p className="text-xs text-slate-500">Pilih menu favoritmu. Login sebagai Pelanggan untuk mulai memesan.</p>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      {(['Semua', 'Makanan', 'Minuman'] as const).map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setSelectedCategory(cat)}
+                          className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                            selectedCategory === cat 
+                              ? 'bg-orange-600 text-white shadow-md' 
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Menu Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {filteredMenu.map((item) => (
+                      <div 
+                        key={item.id} 
+                        className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between group"
+                      >
+                        <div className="relative h-48 overflow-hidden bg-slate-100">
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            onError={(e)=>{
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                            }}
+                          />
+                          <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-2.5 py-1 rounded-lg">
+                            {item.category}
+                          </span>
+                        </div>
+                        
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-base line-clamp-1">{item.name}</h4>
+                            <p className="text-slate-500 text-xs mt-1 line-clamp-2 leading-relaxed">{item.description}</p>
+                          </div>
+                          
+                          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100">
+                            <span className="font-black text-orange-600 text-base">
+                              Rp {item.price.toLocaleString()}
+                            </span>
+                            <button 
+                              onClick={() => {
+                                setShowAuthModal(true);
+                                setAuthMode('login');
+                              }}
+                              className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow transition"
+                            >
+                              Login untuk Pesan
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 2. CUSTOMER VIEW (LOGGED IN AS PELANGGAN) */}
+            {currentUser && currentUser.role === 'pelanggan' && activeTab === 'customer' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Menu Catalog & Search */}
                 <div className="lg:col-span-2 space-y-6">
@@ -758,20 +853,12 @@ export default function App() {
                     </div>
                     <div className="relative z-10 max-w-lg">
                       <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                        Pesan Cepat & Praktis
+                        Halo, {currentUser.name}!
                       </span>
-                      <h2 className="text-3xl md:text-4xl font-black mt-3 mb-2">Lapar? PesenDong Aja!</h2>
+                      <h2 className="text-3xl md:text-4xl font-black mt-3 mb-2">Pilih Menu Favoritmu</h2>
                       <p className="text-orange-100 text-sm leading-relaxed">
-                        Nikmati hidangan lezat favoritmu diantar langsung ke depan pintu rumahmu dengan pelacakan status real-time.
+                        Tambahkan item ke keranjang dan kirim pesanan langsung ke Warung secara real-time.
                       </p>
-                      {!currentUser && (
-                        <button
-                          onClick={() => setShowAuthModal(true)}
-                          className="mt-4 px-4 py-2 bg-white text-orange-600 font-bold rounded-xl text-xs shadow inline-flex items-center gap-2 hover:bg-orange-50 transition"
-                        >
-                          <UserPlus className="w-4 h-4" /> Daftar / Login untuk Pesan
-                        </button>
-                      )}
                     </div>
                   </div>
 
@@ -879,19 +966,7 @@ export default function App() {
                       </span>
                     </div>
 
-                    {!currentUser ? (
-                      <div className="text-center py-10 space-y-3">
-                        <User className="w-12 h-12 text-orange-300 mx-auto" />
-                        <h4 className="font-bold text-sm text-slate-800">Login Diperlukan</h4>
-                        <p className="text-xs text-slate-500">Anda harus login & memiliki nomor WhatsApp aktif untuk checkout.</p>
-                        <button
-                          onClick={() => setShowAuthModal(true)}
-                          className="w-full py-2.5 bg-orange-600 text-white text-xs font-bold rounded-xl shadow hover:bg-orange-700 transition"
-                        >
-                          Login / Daftar Sekarang
-                        </button>
-                      </div>
-                    ) : cart.length === 0 ? (
+                    {cart.length === 0 ? (
                       <div className="text-center py-12">
                         <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                         <p className="text-slate-500 font-medium text-sm">Keranjang masih kosong</p>
@@ -1026,8 +1101,8 @@ export default function App() {
               </div>
             )}
 
-            {/* 2. TRACKING TAB */}
-            {activeTab === 'tracking' && (
+            {/* TRACKING TAB */}
+            {currentUser && currentUser.role === 'pelanggan' && activeTab === 'tracking' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 text-center space-y-4">
                   <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
@@ -1161,224 +1236,203 @@ export default function App() {
               </div>
             )}
 
-            {/* 3. ADMIN TAB */}
-            {activeTab === 'admin' && (
-              <div className="space-y-6">
-                {!adminLoggedIn ? (
-                  <div className="max-w-md mx-auto bg-white rounded-3xl border border-slate-200 shadow-xl p-8 space-y-6 text-center">
-                    <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
-                      <Lock className="w-8 h-8" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-800">Login Admin PesenDong</h2>
-                      <p className="text-slate-500 text-xs mt-1">Masukkan password admin untuk mengelola menu dan pesanan.</p>
-                    </div>
-
-                    <form onSubmit={handleAdminLogin} className="space-y-4">
-                      <input 
-                        type="password" 
-                        required
-                        placeholder="Password (cth: admin123)"
-                        value={adminPass}
-                        onChange={(e) => setAdminPass(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 text-center font-bold tracking-widest"
-                      />
-                      <button 
-                        type="submit"
-                        className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg transition"
-                      >
-                        Masuk Dashboard Admin
-                      </button>
-                    </form>
-                    <p className="text-[11px] text-slate-400">Hint demo password: <code className="bg-slate-100 px-1.5 py-0.5 rounded font-bold">admin123</code></p>
+            {/* 3. WARUNG VIEW (LOGGED IN AS WARUNG) */}
+            {currentUser && currentUser.role === 'warung' && activeTab === 'warung' && (
+              <div className="space-y-8">
+                {/* Warung Header */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
+                  <div>
+                    <span className="bg-orange-100 text-orange-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                      <Store className="w-3.5 h-3.5" /> Dashboard Warung Aktif
+                    </span>
+                    <h2 className="text-2xl font-black text-slate-800 mt-1">Halo, {currentUser.name} (Warung)</h2>
+                    <p className="text-xs text-slate-500">No. WA Warung: {currentUser.whatsappNumber} | Email: {currentUser.email}</p>
                   </div>
-                ) : (
-                  <div className="space-y-8">
-                    {/* Admin Header with Profile & Logout */}
-                    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
-                      <div>
-                        <span className="bg-orange-100 text-orange-700 text-xs font-bold px-3 py-1 rounded-full">Admin Panel Aktif</span>
-                        <h2 className="text-2xl font-black text-slate-800 mt-1">Halo, {adminProfile.name}</h2>
-                        <p className="text-xs text-slate-500">No. WA Admin: {adminProfile.whatsappNumber} | Email: {adminProfile.email}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => setShowAdminProfileModal(true)}
-                          className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold rounded-xl flex items-center gap-2 transition"
-                        >
-                          <Settings className="w-4 h-4" /> Edit Profil Admin
-                        </button>
-                        <button 
-                          onClick={() => setAdminLoggedIn(false)}
-                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition"
-                        >
-                          <LogOut className="w-4 h-4" /> Keluar
-                        </button>
-                      </div>
-                    </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        setProfileForm({
+                          name: currentUser.name,
+                          whatsappNumber: currentUser.whatsappNumber,
+                          email: currentUser.email,
+                          address: currentUser.address,
+                          password: ''
+                        });
+                        setShowProfileModal(true);
+                      }}
+                      className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold rounded-xl flex items-center gap-2 transition"
+                    >
+                      <Settings className="w-4 h-4" /> Edit Profil Warung
+                    </button>
+                    <button 
+                      onClick={() => setCurrentUser(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition"
+                    >
+                      <LogOut className="w-4 h-4" /> Keluar
+                    </button>
+                  </div>
+                </div>
 
-                    {/* SECTION A: Incoming Orders Management */}
-                    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-orange-600" /> Daftar Pesanan Masuk ({orders.length})
-                        </h3>
-                        <span className="text-xs text-slate-500">Pembaruan otomatis real-time</span>
-                      </div>
+                {/* SECTION A: Incoming Orders Management */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-orange-600" /> Daftar Pesanan Masuk ({orders.length})
+                    </h3>
+                    <span className="text-xs text-slate-500">Pembaruan otomatis real-time</span>
+                  </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-bold">
-                            <tr>
-                              <th className="p-3 rounded-l-xl">Kode / Waktu</th>
-                              <th className="p-3">Pelanggan & Alamat</th>
-                              <th className="p-3">Pesanan</th>
-                              <th className="p-3">Total & Bayar</th>
-                              <th className="p-3">Status Pesanan</th>
-                              <th className="p-3 rounded-r-xl text-center">Aksi WA</th>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-bold">
+                        <tr>
+                          <th className="p-3 rounded-l-xl">Kode / Waktu</th>
+                          <th className="p-3">Pelanggan & Alamat</th>
+                          <th className="p-3">Pesanan</th>
+                          <th className="p-3">Total & Bayar</th>
+                          <th className="p-3">Status Pesanan</th>
+                          <th className="p-3 rounded-r-xl text-center">Aksi WA</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {orders.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center py-8 text-slate-400">Belum ada pesanan masuk.</td>
+                          </tr>
+                        ) : (
+                          orders.map((o) => (
+                            <tr key={o.id} className="hover:bg-slate-50/80 transition">
+                              <td className="p-3 font-mono font-bold text-orange-600">
+                                {o.orderCode}
+                                <div className="text-[10px] text-slate-400 font-normal">
+                                  {new Date(o.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800">{o.customerName}</div>
+                                <div className="text-xs text-slate-500">{o.customerPhone}</div>
+                                <div className="text-[11px] text-slate-400 line-clamp-1">{o.deliveryAddress}</div>
+                              </td>
+                              <td className="p-3 text-xs">
+                                {o.items.map((i, idx) => (
+                                  <div key={idx}>- {i.name} ({i.quantity}x)</div>
+                                ))}
+                              </td>
+                              <td className="p-3">
+                                <div className="font-black text-slate-800">Rp {o.totalAmount.toLocaleString()}</div>
+                                <div className="text-[11px] text-slate-500">{o.paymentMethod}</div>
+                                <select
+                                  value={o.paymentStatus}
+                                  onChange={(e) => handleUpdatePaymentStatus(o.id, e.target.value as any)}
+                                  className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                    o.paymentStatus === 'Lunas' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-800'
+                                  }`}
+                                >
+                                  <option value="Belum Lunas">Belum Lunas</option>
+                                  <option value="Lunas">Lunas</option>
+                                </select>
+                              </td>
+                              <td className="p-3">
+                                <select
+                                  value={o.status}
+                                  onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value as any)}
+                                  className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border ${
+                                    o.status === 'Selesai' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
+                                    o.status === 'Dibatalkan' ? 'bg-red-50 border-red-300 text-red-800' :
+                                    'bg-orange-50 border-orange-300 text-orange-800'
+                                  }`}
+                                >
+                                  <option value="Menunggu Konfirmasi">Menunggu Konfirmasi</option>
+                                  <option value="Diproses">Diproses (Masak)</option>
+                                  <option value="Dalam Pengiriman">Dalam Pengiriman</option>
+                                  <option value="Selesai">Selesai</option>
+                                  <option value="Dibatalkan">Dibatalkan</option>
+                                </select>
+                              </td>
+                              <td className="p-3 text-center">
+                                <a 
+                                  href={`https://wa.me/${o.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Halo Kak ${o.customerName}, pesanan PesenDong dengan kode *${o.orderCode}* statusnya saat ini: *${o.status}*. Terima kasih telah memesan!`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition"
+                                  title="Kirim Pesan WhatsApp"
+                                >
+                                  <Phone className="w-4 h-4" />
+                                </a>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {orders.length === 0 ? (
-                              <tr>
-                                <td colSpan={6} className="text-center py-8 text-slate-400">Belum ada pesanan masuk.</td>
-                              </tr>
-                            ) : (
-                              orders.map((o) => (
-                                <tr key={o.id} className="hover:bg-slate-50/80 transition">
-                                  <td className="p-3 font-mono font-bold text-orange-600">
-                                    {o.orderCode}
-                                    <div className="text-[10px] text-slate-400 font-normal">
-                                      {new Date(o.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                  </td>
-                                  <td className="p-3">
-                                    <div className="font-bold text-slate-800">{o.customerName}</div>
-                                    <div className="text-xs text-slate-500">{o.customerPhone}</div>
-                                    <div className="text-[11px] text-slate-400 line-clamp-1">{o.deliveryAddress}</div>
-                                  </td>
-                                  <td className="p-3 text-xs">
-                                    {o.items.map((i, idx) => (
-                                      <div key={idx}>- {i.name} ({i.quantity}x)</div>
-                                    ))}
-                                  </td>
-                                  <td className="p-3">
-                                    <div className="font-black text-slate-800">Rp {o.totalAmount.toLocaleString()}</div>
-                                    <div className="text-[11px] text-slate-500">{o.paymentMethod}</div>
-                                    <select
-                                      value={o.paymentStatus}
-                                      onChange={(e) => handleUpdatePaymentStatus(o.id, e.target.value as any)}
-                                      className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                        o.paymentStatus === 'Lunas' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-800'
-                                      }`}
-                                    >
-                                      <option value="Belum Lunas">Belum Lunas</option>
-                                      <option value="Lunas">Lunas</option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3">
-                                    <select
-                                      value={o.status}
-                                      onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value as any)}
-                                      className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border ${
-                                        o.status === 'Selesai' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' :
-                                        o.status === 'Dibatalkan' ? 'bg-red-50 border-red-300 text-red-800' :
-                                        'bg-orange-50 border-orange-300 text-orange-800'
-                                      }`}
-                                    >
-                                      <option value="Menunggu Konfirmasi">Menunggu Konfirmasi</option>
-                                      <option value="Diproses">Diproses (Masak)</option>
-                                      <option value="Dalam Pengiriman">Dalam Pengiriman</option>
-                                      <option value="Selesai">Selesai</option>
-                                      <option value="Dibatalkan">Dibatalkan</option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <a 
-                                      href={`https://wa.me/${o.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Halo Kak ${o.customerName}, pesanan PesenDong dengan kode *${o.orderCode}* statusnya saat ini: *${o.status}*. Terima kasih telah memesan!`)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center justify-center p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition"
-                                      title="Kirim Pesan WhatsApp"
-                                    >
-                                      <Phone className="w-4 h-4" />
-                                    </a>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* SECTION B: Menu Management */}
-                    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                          <Utensils className="w-5 h-5 text-orange-600" /> Kelola Menu Makanan & Minuman
-                        </h3>
-                        <button 
-                          onClick={() => {
-                            setEditingMenuItem(null);
-                            setNewMenuForm({
-                              name: '',
-                              category: 'Makanan',
-                              price: 20000,
-                              description: '',
-                              imageUrl: '',
-                              available: true
-                            });
-                            setIsNewMenuModal(true);
-                          }}
-                          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-2 transition"
-                        >
-                          <Plus className="w-4 h-4" /> Tambah Menu Baru
-                        </button>
-                      </div>
-
-                      {/* Menu table */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {menuItems.map((item) => (
-                          <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4 items-center">
-                            <img 
-                              src={item.imageUrl} 
-                              alt={item.name} 
-                              className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-200"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
-                              }}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">{item.category}</span>
-                              <h4 className="font-bold text-sm text-slate-800 truncate mt-0.5">{item.name}</h4>
-                              <p className="text-xs text-orange-600 font-black">Rp {item.price.toLocaleString()}</p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <button 
-                                  onClick={() => startEditMenu(item)}
-                                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
-                                >
-                                  <Edit className="w-3 h-3" /> Edit
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteMenu(item.id)}
-                                  className="px-2.5 py-1 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-100 flex items-center gap-1"
-                                >
-                                  <Trash2 className="w-3 h-3" /> Hapus
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                )}
+                </div>
+
+                {/* SECTION B: Menu Management */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <Utensils className="w-5 h-5 text-orange-600" /> Kelola Menu Makanan & Minuman Warung
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        setEditingMenuItem(null);
+                        setNewMenuForm({
+                          name: '',
+                          category: 'Makanan',
+                          price: 20000,
+                          description: '',
+                          imageUrl: '',
+                          available: true
+                        });
+                        setIsNewMenuModal(true);
+                      }}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-2 transition"
+                    >
+                      <Plus className="w-4 h-4" /> Tambah Menu Baru
+                    </button>
+                  </div>
+
+                  {/* Menu table */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {menuItems.map((item) => (
+                      <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4 items-center">
+                        <img 
+                          src={item.imageUrl} 
+                          alt={item.name} 
+                          className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">{item.category}</span>
+                          <h4 className="font-bold text-sm text-slate-800 truncate mt-0.5">{item.name}</h4>
+                          <p className="text-xs text-orange-600 font-black">Rp {item.price.toLocaleString()}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <button 
+                              onClick={() => startEditMenu(item)}
+                              className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                            >
+                              <Edit className="w-3 h-3" /> Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteMenu(item.id)}
+                              className="px-2.5 py-1 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-100 flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" /> Hapus
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* 4. REPORTS TAB */}
-            {activeTab === 'reports' && (
+            {/* 4. REPORTS TAB (WARUNG ONLY) */}
+            {currentUser && currentUser.role === 'warung' && activeTab === 'reports' && (
               <div className="space-y-6">
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
                   <div>
@@ -1469,14 +1523,14 @@ export default function App() {
         )}
       </main>
 
-      {/* Customer Auth Modal (Login / Register) */}
+      {/* Auth Modal (Login / Register with Role Selection) */}
       {showAuthModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
                 <User className="w-5 h-5 text-orange-600" />
-                {authMode === 'login' ? 'Login Pelanggan' : 'Registrasi Pelanggan Baru'}
+                {authMode === 'login' ? 'Login PesenDong' : 'Registrasi Akun Baru'}
               </h3>
               <button onClick={() => setShowAuthModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
                 <XCircle className="w-6 h-6" />
@@ -1501,21 +1555,50 @@ export default function App() {
             </div>
 
             <form onSubmit={handleAuthSubmit} className="space-y-3">
+              {/* Role Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Role / Peran *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAuthRole('pelanggan')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                      authRole === 'pelanggan'
+                        ? 'bg-orange-50 border-orange-500 text-orange-700'
+                        : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <User className="w-4 h-4" /> Pelanggan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthRole('warung')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                      authRole === 'warung'
+                        ? 'bg-orange-50 border-orange-500 text-orange-700'
+                        : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <Store className="w-4 h-4" /> Warung
+                  </button>
+                </div>
+              </div>
+
               {authMode === 'register' && (
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Lengkap *</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Lengkap / Nama Warung *</label>
                     <input 
                       type="text"
                       required
-                      placeholder="cth: Siti Rahma"
+                      placeholder={authRole === 'warung' ? 'cth: Warung Makan Berkah' : 'cth: Siti Rahma'}
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
                       className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp Aktif * (Wajib untuk Order)</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp Aktif * (Wajib)</label>
                     <input 
                       type="tel"
                       required
@@ -1526,7 +1609,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat Pengiriman Utama</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat Utama / Lokasi Warung</label>
                     <textarea 
                       rows={2}
                       placeholder="cth: Jl. Mawar No. 5, Jakarta..."
@@ -1543,7 +1626,7 @@ export default function App() {
                 <input 
                   type="email"
                   required
-                  placeholder="cth: siti@email.com"
+                  placeholder="cth: user@email.com"
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -1575,13 +1658,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Customer Profile Edit Modal */}
+      {/* Profile Edit Modal */}
       {showProfileModal && currentUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-orange-600" /> Edit Profil Pelanggan
+                <Settings className="w-5 h-5 text-orange-600" /> Edit Profil ({currentUser.role === 'warung' ? 'Warung' : 'Pelanggan'})
               </h3>
               <button onClick={() => setShowProfileModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
                 <XCircle className="w-6 h-6" />
@@ -1590,7 +1673,7 @@ export default function App() {
 
             <form onSubmit={handleUpdateProfile} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Lengkap *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Nama *</label>
                 <input 
                   type="text"
                   required
@@ -1601,7 +1684,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp Aktif * (Wajib untuk Order)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp Aktif *</label>
                 <input 
                   type="tel"
                   required
@@ -1609,7 +1692,6 @@ export default function App() {
                   onChange={(e) => setProfileForm({ ...profileForm, whatsappNumber: e.target.value })}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold"
                 />
-                <p className="text-[10px] text-slate-400 mt-0.5">Pesanan otomatis terkirim & terlacak ke nomor WhatsApp ini.</p>
               </div>
 
               <div>
@@ -1624,7 +1706,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat Pengiriman Utama</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat / Lokasi</label>
                 <textarea 
                   rows={2}
                   value={profileForm.address}
@@ -1637,7 +1719,7 @@ export default function App() {
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Password Baru (Opsional)</label>
                 <input 
                   type="password"
-                  placeholder="Kosongkan jika tidak ingin mengubah password"
+                  placeholder="Kosongkan jika tidak ingin mengubah"
                   value={profileForm.password}
                   onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -1657,84 +1739,6 @@ export default function App() {
                   className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow transition"
                 >
                   Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Profile Edit Modal */}
-      {showAdminProfileModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-orange-600" /> Edit Profil Admin
-              </h3>
-              <button onClick={() => setShowAdminProfileModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                <XCircle className="w-6 h-6" />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateAdminProfile} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Admin *</label>
-                <input 
-                  type="text"
-                  required
-                  value={adminProfile.name}
-                  onChange={(e) => setAdminProfile({ ...adminProfile, name: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp Admin *</label>
-                <input 
-                  type="tel"
-                  required
-                  value={adminProfile.whatsappNumber}
-                  onChange={(e) => setAdminProfile({ ...adminProfile, whatsappNumber: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Email Admin *</label>
-                <input 
-                  type="email"
-                  required
-                  value={adminProfile.email}
-                  onChange={(e) => setAdminProfile({ ...adminProfile, email: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Password Admin *</label>
-                <input 
-                  type="text"
-                  required
-                  value={adminProfile.password}
-                  onChange={(e) => setAdminProfile({ ...adminProfile, password: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono font-bold"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-3 border-t border-slate-100">
-                <button 
-                  type="button"
-                  onClick={() => setShowAdminProfileModal(false)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
-                >
-                  Batal
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow transition"
-                >
-                  Simpan Profil Admin
                 </button>
               </div>
             </form>

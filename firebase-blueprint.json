@@ -31,14 +31,14 @@
       }
     },
     "User": {
-      "description": "Customer and admin profiles with active WhatsApp numbers",
+      "description": "Pelanggan and Warung accounts with WhatsApp numbers and roles",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string", "maxLength": 100 },
         "whatsappNumber": { "type": "string", "maxLength": 30 },
         "email": { "type": "string", "maxLength": 100 },
         "password": { "type": "string", "maxLength": 100 },
-        "role": { "type": "string", "enum": ["customer", "admin"] },
+        "role": { "type": "string", "enum": ["pelanggan", "warung"] },
         "address": { "type": "string", "maxLength": 300 },
         "createdAt": { "type": "string" }
       }
@@ -48,15 +48,15 @@
     "collections": {
       "menu": {
         "schema": "MenuItem",
-        "description": "Public readable menu items, admin writable"
+        "description": "Public readable menu items, warung writable"
       },
       "orders": {
         "schema": "Order",
-        "description": "Public creatable orders, admin readable and writable"
+        "description": "Public creatable orders, warung readable and writable"
       },
       "users": {
         "schema": "User",
-        "description": "Customer and admin accounts"
+        "description": "Pelanggan and Warung user accounts"
       }
     }
   }
