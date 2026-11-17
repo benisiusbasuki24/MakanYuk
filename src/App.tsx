@@ -62,7 +62,7 @@ export interface UserAccount {
 
 const DEFAULT_MENU: Omit<MenuItem, 'id'>[] = [
   {
-    name: 'Nasi Goreng Spesial MakanYuk',
+    name: 'Nasi Goreng Spesial PesenDong',
     category: 'Makanan',
     price: 25000,
     description: 'Nasi goreng gurih dengan bumbu rempah rahasia, ayam suwir, telur mata sapi, dan kerupuk udang.',
@@ -127,7 +127,7 @@ export default function App() {
 
   // Auth state
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('makanyuk_current_user');
+    const saved = localStorage.getItem('pesendong_current_user');
     return saved ? JSON.parse(saved) : null;
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -152,9 +152,9 @@ export default function App() {
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [adminPass, setAdminPass] = useState('');
   const [adminProfile, setAdminProfile] = useState({
-    name: 'Admin Utama MakanYuk',
+    name: 'Admin Utama PesenDong',
     whatsappNumber: '081234567890',
-    email: 'admin@makanyuk.com',
+    email: 'admin@pesendong.com',
     password: 'admin123'
   });
   const [showAdminProfileModal, setShowAdminProfileModal] = useState(false);
@@ -188,9 +188,9 @@ export default function App() {
   // Sync user to localStorage
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('makanyuk_current_user', JSON.stringify(currentUser));
+      localStorage.setItem('pesendong_current_user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('makanyuk_current_user');
+      localStorage.removeItem('pesendong_current_user');
     }
   }, [currentUser]);
 
@@ -249,7 +249,6 @@ export default function App() {
         alert('Mohon lengkapi Nama, Nomor WhatsApp Aktif, Email, dan Password!');
         return;
       }
-      // Check WhatsApp active format
       if (authWhatsapp.length < 9) {
         alert('Nomor WhatsApp tidak valid. Masukkan nomor WhatsApp aktif yang benar.');
         return;
@@ -267,17 +266,15 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
 
-        // Save to Firestore users collection
         await setDoc(doc(db, 'users', newUser.id), newUser);
         setCurrentUser(newUser);
         setShowAuthModal(false);
-        alert('Registrasi berhasil! Selamat datang di MakanYuk.');
+        alert('Registrasi berhasil! Selamat datang di PesenDong.');
       } catch (err) {
         console.error("Error registering user:", err);
         alert('Gagal registrasi. Silakan coba lagi.');
       }
     } else {
-      // Login
       if (!authEmail || !authPassword) {
         alert('Masukkan Email dan Password!');
         return;
@@ -375,7 +372,7 @@ export default function App() {
   const deliveryFee = 10000;
   const grandTotal = cartTotal > 0 ? cartTotal + deliveryFee : 0;
 
-  // Submit Order (Only allowed if logged in & has WhatsApp number)
+  // Submit Order
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
@@ -402,7 +399,7 @@ export default function App() {
 
     setSubmittingOrder(true);
     try {
-      const orderCode = 'MY-' + Math.floor(1000 + Math.random() * 9000);
+      const orderCode = 'PD-' + Math.floor(1000 + Math.random() * 9000);
       const newOrderData: Omit<Order, 'id'> = {
         orderCode,
         customerName: currentUser.name,
@@ -422,7 +419,7 @@ export default function App() {
 
       // WhatsApp notification link generation
       const waMessage = encodeURIComponent(
-        `Halo Admin MakanYuk! Saya memesan makanan baru:\n\n` +
+        `Halo Admin PesenDong! Saya memesan makanan baru:\n\n` +
         `No. Pesanan: *${orderCode}*\n` +
         `Nama: *${currentUser.name}*\n` +
         `No. WA: *${currentUser.whatsappNumber}*\n` +
@@ -576,7 +573,7 @@ export default function App() {
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Penjualan");
-    XLSX.writeFile(workbook, `Laporan_Penjualan_MakanYuk_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(workbook, `Laporan_Penjualan_PesenDong_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const exportToCSV = () => {
@@ -601,7 +598,7 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Laporan_Penjualan_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `Laporan_Penjualan_PesenDong_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -625,7 +622,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-wider flex items-center gap-1">
-                MakanYuk <span className="text-xs bg-amber-300 text-orange-900 px-2 py-0.5 rounded-full font-bold">Express</span>
+                PesenDong <span className="text-xs bg-amber-300 text-orange-900 px-2 py-0.5 rounded-full font-bold">Express</span>
               </h1>
               <p className="text-xs text-orange-100">Pesan Antar Makanan & Minuman Real-time</p>
             </div>
@@ -647,8 +644,9 @@ export default function App() {
                   activeTab === 'tracking' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
                 }`}
               >
-                <Truck className="w-4 h-4" /> Lacak
+                <Truck className="w-4 h-4" /> Lacak Pesanan
               </button>
+
               {!currentUser && (
                 <>
                   <button 
@@ -762,7 +760,7 @@ export default function App() {
                       <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                         Pesan Cepat & Praktis
                       </span>
-                      <h2 className="text-3xl md:text-4xl font-black mt-3 mb-2">Lapar? MakanYuk Aja!</h2>
+                      <h2 className="text-3xl md:text-4xl font-black mt-3 mb-2">Lapar? PesenDong Aja!</h2>
                       <p className="text-orange-100 text-sm leading-relaxed">
                         Nikmati hidangan lezat favoritmu diantar langsung ke depan pintu rumahmu dengan pelacakan status real-time.
                       </p>
@@ -987,8 +985,8 @@ export default function App() {
                           </div>
                           {paymentMethod === 'Transfer Bank' && (
                             <div className="mt-2 p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
-                              <p className="font-bold">Transfer ke Rekening Resmi MakanYuk:</p>
-                              <p>BCA: <span className="font-mono font-bold">1234-5678-90</span> (a.n PT MakanYuk Indonesia)</p>
+                              <p className="font-bold">Transfer ke Rekening Resmi PesenDong:</p>
+                              <p>BCA: <span className="font-mono font-bold">1234-5678-90</span> (a.n PT PesenDong Indonesia)</p>
                             </div>
                           )}
                         </div>
@@ -1037,7 +1035,7 @@ export default function App() {
                   </div>
                   <h2 className="text-2xl font-black text-slate-800">Lacakan Pesanan Real-Time</h2>
                   <p className="text-slate-500 text-sm max-w-md mx-auto">
-                    Masukkan Kode Pesanan (cth: #MY-XXXX) atau nomor WhatsApp Anda untuk memantau status pesanan secara langsung.
+                    Masukkan Kode Pesanan (cth: #PD-XXXX) atau nomor WhatsApp Anda untuk memantau status pesanan secara langsung.
                   </p>
 
                   <div className="flex gap-2 max-w-md mx-auto pt-2">
@@ -1045,7 +1043,7 @@ export default function App() {
                       <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                       <input 
                         type="text" 
-                        placeholder="Cth: MY-4821" 
+                        placeholder="Cth: PD-4821" 
                         value={searchCode}
                         onChange={(e) => setSearchCode(e.target.value)}
                         className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase font-mono font-bold"
@@ -1172,7 +1170,7 @@ export default function App() {
                       <Lock className="w-8 h-8" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black text-slate-800">Login Admin MakanYuk</h2>
+                      <h2 className="text-2xl font-black text-slate-800">Login Admin PesenDong</h2>
                       <p className="text-slate-500 text-xs mt-1">Masukkan password admin untuk mengelola menu dan pesanan.</p>
                     </div>
 
@@ -1297,7 +1295,7 @@ export default function App() {
                                   </td>
                                   <td className="p-3 text-center">
                                     <a 
-                                      href={`https://wa.me/${o.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Halo Kak ${o.customerName}, pesanan MakanYuk dengan kode *${o.orderCode}* statusnya saat ini: *${o.status}*. Terima kasih telah memesan!`)}`}
+                                      href={`https://wa.me/${o.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Halo Kak ${o.customerName}, pesanan PesenDong dengan kode *${o.orderCode}* statusnya saat ini: *${o.status}*. Terima kasih telah memesan!`)}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="inline-flex items-center justify-center p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition"
@@ -1852,7 +1850,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
-        <p>© 2026 MakanYuk Express. Seluruh hak cipta dilindungi. Real-time Firebase Synchronized.</p>
+        <p>© 2026 PesenDong Express. Seluruh hak cipta dilindungi. Real-time Firebase Synchronized.</p>
       </footer>
     </div>
   );

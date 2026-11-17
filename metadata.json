@@ -1,6 +1,6 @@
 {
-  "name": "MakanYuk - Pesan Antar Makanan & Pelacakan Real-time",
-  "description": "Aplikasi pesan antar makanan dengan pelacakan pesanan real-time, manajemen menu admin, dan laporan penjualan.",
+  "name": "PesenDong - Pesan Antar Makanan & Pelacakan Real-time",
+  "description": "Aplikasi pesan antar makanan PesenDong dengan pelacakan pesanan real-time, manajemen menu admin, dan laporan penjualan.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
