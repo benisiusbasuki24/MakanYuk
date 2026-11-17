@@ -3,7 +3,7 @@ import {
   Utensils, ShoppingBag, Truck, CheckCircle2, Clock, XCircle, Plus, Minus, 
   Trash2, Edit, Save, Search, Filter, FileSpreadsheet, FileText, Download, 
   Phone, MapPin, User, ShieldCheck, DollarSign, QrCode, ArrowRight, RefreshCw, 
-  Check, AlertCircle, Image as ImageIcon, Sparkles, ChefHat, LogOut, Lock, UserPlus, Key, Settings, Store
+  Check, AlertCircle, Image as ImageIcon, Sparkles, ChefHat, LogOut, Lock, UserPlus, Key, Settings, Store, Users, Receipt
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -55,7 +55,7 @@ export interface UserAccount {
   whatsappNumber: string;
   email: string;
   password?: string;
-  role: 'pelanggan' | 'warung';
+  role: 'pelanggan' | 'warung' | 'superadmin';
   address: string;
   createdAt: string;
 }
@@ -120,9 +120,10 @@ const DEFAULT_MENU: Omit<MenuItem, 'id'>[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'customer' | 'tracking' | 'warung' | 'reports'>('customer');
+  const [activeTab, setActiveTab] = useState<'customer' | 'tracking' | 'warung' | 'superadmin' | 'reports'>('customer');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [usersList, setUsersList] = useState<UserAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Auth state
@@ -131,7 +132,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Auth Modal state (Login / Register with role selection)
+  // Auth Modal state
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authRole, setAuthRole] = useState<'pelanggan' | 'warung'>('pelanggan');
@@ -149,6 +150,17 @@ export default function App() {
     email: '',
     address: '',
     password: ''
+  });
+
+  // Superadmin manual user register modal
+  const [showSuperRegisterModal, setShowSuperRegisterModal] = useState(false);
+  const [superRegForm, setSuperRegForm] = useState({
+    name: '',
+    whatsappNumber: '',
+    email: '',
+    password: '',
+    role: 'pelanggan' as 'pelanggan' | 'warung',
+    address: ''
   });
 
   // Customer Cart state
@@ -177,11 +189,13 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<'Semua' | 'Makanan' | 'Minuman'>('Semua');
   const [searchMenuQuery, setSearchMenuQuery] = useState('');
 
-  // Sync user to localStorage
+  // Sync user to localStorage & activeTab
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('pesendong_current_user', JSON.stringify(currentUser));
-      if (currentUser.role === 'warung') {
+      if (currentUser.email === 'order.bangben@gmail.com') {
+        setActiveTab('superadmin');
+      } else if (currentUser.role === 'warung') {
         setActiveTab('warung');
       } else {
         setActiveTab('customer');
@@ -191,11 +205,11 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Fetch Menu and Orders in Real-time from Firestore
+  // Real-time Firestore Listeners (Menu, Orders, Users)
   useEffect(() => {
     setLoading(true);
     
-    // Listen to Menu
+    // 1. Listen to Menu
     const menuQuery = query(collection(db, 'menu'));
     const unsubscribeMenu = onSnapshot(menuQuery, async (snapshot) => {
       const items: MenuItem[] = [];
@@ -226,7 +240,7 @@ export default function App() {
       setLoading(false);
     });
 
-    // Listen to Orders
+    // 2. Listen to Orders
     const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       const fetchedOrders: Order[] = [];
@@ -238,13 +252,26 @@ export default function App() {
       console.error("Error listening to orders:", error);
     });
 
+    // 3. Listen to Users
+    const usersQuery = query(collection(db, 'users'));
+    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+      const fetchedUsers: UserAccount[] = [];
+      snapshot.forEach((docSnap) => {
+        fetchedUsers.push({ id: docSnap.id, ...docSnap.data() } as UserAccount);
+      });
+      setUsersList(fetchedUsers);
+    }, (error) => {
+      console.error("Error listening to users:", error);
+    });
+
     return () => {
       unsubscribeMenu();
       unsubscribeOrders();
+      unsubscribeUsers();
     };
   }, []);
 
-  // Auth Handlers with Role Selection
+  // Auth Handlers with Role Selection & Superadmin support
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (authMode === 'register') {
@@ -290,13 +317,13 @@ export default function App() {
           name: 'Superadmin PesenDong',
           whatsappNumber: '081234567890',
           email: 'order.bangben@gmail.com',
-          role: 'warung',
+          role: 'superadmin',
           address: 'Pusat PesenDong Express',
           createdAt: new Date().toISOString()
         };
         setCurrentUser(superAdminUser);
         setShowAuthModal(false);
-        alert('Login berhasil sebagai Superadmin (Warung)!');
+        alert('Login berhasil sebagai Superadmin!');
         return;
       }
 
@@ -320,6 +347,48 @@ export default function App() {
       } catch (err) {
         console.error("Error logging in:", err);
         alert('Gagal login. Silakan coba lagi.');
+      }
+    }
+  };
+
+  // Superadmin register user directly
+  const handleSuperRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!superRegForm.name || !superRegForm.email || !superRegForm.password || !superRegForm.whatsappNumber) {
+      alert('Mohon lengkapi semua field yang wajib!');
+      return;
+    }
+
+    try {
+      const newUser: UserAccount = {
+        id: 'user_' + Date.now(),
+        name: superRegForm.name.trim(),
+        whatsappNumber: superRegForm.whatsappNumber.trim(),
+        email: superRegForm.email.trim(),
+        password: superRegForm.password,
+        role: superRegForm.role,
+        address: superRegForm.address.trim(),
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(doc(db, 'users', newUser.id), newUser);
+      setShowSuperRegisterModal(false);
+      setSuperRegForm({ name: '', whatsappNumber: '', email: '', password: '', role: 'pelanggan', address: '' });
+      alert(`Berhasil mendaftarkan ${newUser.role} baru!`);
+    } catch (err) {
+      console.error("Error super-registering user:", err);
+      alert('Gagal mendaftarkan user.');
+    }
+  };
+
+  // Delete User (Superadmin)
+  const handleDeleteUser = async (userId: string) => {
+    if (confirm('Yakin ingin menghapus akun user ini?')) {
+      try {
+        await deleteDoc(doc(db, 'users', userId));
+      } catch (err) {
+        console.error("Error deleting user:", err);
+        alert('Gagal menghapus user.');
       }
     }
   };
@@ -445,7 +514,6 @@ export default function App() {
       const placedOrder: Order = { id: docRef.id, ...newOrderData };
       setLastPlacedOrder(placedOrder);
 
-      // WhatsApp notification link generation to Warung
       const waMessage = encodeURIComponent(
         `Halo Warung PesenDong! Ada pesanan baru:\n\n` +
         `No. Pesanan: *${orderCode}*\n` +
@@ -567,6 +635,19 @@ export default function App() {
     setIsNewMenuModal(true);
   };
 
+  // Calculate platform fee (Biaya Jasa Aplikasi: Rp. 500 per food item ordered)
+  const calculateTotalFoodItems = () => {
+    return orders.reduce((sum, o) => {
+      const foodCount = o.items.reduce((itemSum, i) => {
+        // Count food items (or all items if category not specified in item, let's count all quantities or check menu category)
+        return itemSum + i.quantity;
+      }, 0);
+      return sum + foodCount;
+    }, 0);
+  };
+
+  const totalPlatformFee = calculateTotalFoodItems() * 500;
+
   const exportToExcel = () => {
     const completedOrders = orders.filter(o => o.status === 'Selesai');
     const dataToExport = completedOrders.map(o => ({
@@ -575,6 +656,7 @@ export default function App() {
       'No. WhatsApp': o.customerPhone,
       'Alamat': o.deliveryAddress,
       'Total (Rp)': o.totalAmount,
+      'Biaya Jasa Aplikasi (Rp)': o.items.reduce((s, i) => s + i.quantity, 0) * 500,
       'Metode Pembayaran': o.paymentMethod,
       'Status Pembayaran': o.paymentStatus,
       'Waktu Pesan': new Date(o.createdAt).toLocaleString('id-ID')
@@ -589,7 +671,7 @@ export default function App() {
   const exportToCSV = () => {
     const completedOrders = orders.filter(o => o.status === 'Selesai');
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Kode Pesanan,Nama Pelanggan,No WhatsApp,Alamat,Total,Metode Pembayaran,Status Pembayaran,Waktu\r\n";
+    csvContent += "Kode Pesanan,Nama Pelanggan,No WhatsApp,Alamat,Total,Biaya Jasa (Rp 500/item),Metode Pembayaran,Status Pembayaran,Waktu\r\n";
     
     completedOrders.forEach(o => {
       const row = [
@@ -598,6 +680,7 @@ export default function App() {
         `"${o.customerPhone}"`,
         `"${o.deliveryAddress.replace(/"/g, '""')}"`,
         o.totalAmount,
+        o.items.reduce((s, i) => s + i.quantity, 0) * 500,
         o.paymentMethod,
         o.paymentStatus,
         `"${new Date(o.createdAt).toLocaleString('id-ID')}"`
@@ -608,7 +691,7 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Laporan_Penjualan_PesenDong_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `Laporan_Penjualan_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -623,15 +706,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* 
-        LANDING PAGE / NOT LOGGED IN: NO NAVBAR. Only clean brand header with Login/Register trigger.
-        LOGGED IN AS PELANGGAN: Customer Navbar (Menu, Lacak Pesanan, Profile, Logout).
-        LOGGED IN AS WARUNG: Warung Navbar (Dashboard Warung, Kelola Menu, Laporan, Profile Warung, Logout).
-      */}
+      {/* Top Navbar */}
       <header className="bg-orange-600 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
-            if (currentUser?.role === 'warung') setActiveTab('warung');
+            if (currentUser?.email === 'order.bangben@gmail.com') setActiveTab('superadmin');
+            else if (currentUser?.role === 'warung') setActiveTab('warung');
             else setActiveTab('customer');
           }}>
             <div className="bg-white text-orange-600 p-2 rounded-2xl shadow-md">
@@ -667,7 +747,7 @@ export default function App() {
               </nav>
             )}
 
-            {currentUser && currentUser.role === 'warung' && (
+            {currentUser && currentUser.role === 'warung' && currentUser.email !== 'order.bangben@gmail.com' && (
               <nav className="flex items-center gap-2 overflow-x-auto py-1">
                 <button 
                   onClick={() => setActiveTab('warung')}
@@ -676,6 +756,19 @@ export default function App() {
                   }`}
                 >
                   <Store className="w-4 h-4" /> Dashboard Warung
+                </button>
+              </nav>
+            )}
+
+            {currentUser && currentUser.email === 'order.bangben@gmail.com' && (
+              <nav className="flex items-center gap-2 overflow-x-auto py-1">
+                <button 
+                  onClick={() => setActiveTab('superadmin')}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                    activeTab === 'superadmin' ? 'bg-white text-orange-600 shadow' : 'text-orange-50 hover:bg-orange-700'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" /> Dashboard Superadmin
                 </button>
                 <button 
                   onClick={() => setActiveTab('reports')}
@@ -696,8 +789,10 @@ export default function App() {
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="hidden sm:block text-left text-xs">
-                    <p className="font-bold text-white truncate max-w-[100px]">{currentUser.name}</p>
-                    <p className="text-[10px] text-orange-200 capitalize">Role: {currentUser.role}</p>
+                    <p className="font-bold text-white truncate max-w-[120px]">{currentUser.name}</p>
+                    <p className="text-[10px] text-orange-200 capitalize">
+                      {currentUser.email === 'order.bangben@gmail.com' ? 'Superadmin' : currentUser.role}
+                    </p>
                   </div>
                   <button
                     onClick={() => {
@@ -749,35 +844,34 @@ export default function App() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-12 h-12 border-4 border-orange-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-600 font-medium">Memuat menu dan data pesanan dari Firebase...</p>
+            <p className="text-slate-600 font-medium">Memuat data real-time dari Firebase...</p>
           </div>
         ) : (
           <>
             {/* 1. LANDING PAGE (WHEN NOT LOGGED IN) */}
             {!currentUser && (
               <div className="space-y-8 py-4">
-                {/* Landing Banner & Quick Register/Login Card */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
                   <div className="lg:col-span-2 space-y-4">
                     <span className="bg-white/20 text-white text-xs font-bold px-3.5 py-1 rounded-full uppercase tracking-wider">
-                      Selamat Datang di PesenDong Express
+                      PesenDong Express Platform
                     </span>
                     <h2 className="text-3xl md:text-5xl font-black leading-tight">Lapar? PesenDong Aja!</h2>
                     <p className="text-orange-100 text-base leading-relaxed max-w-xl">
-                      Pesan makanan & minuman favoritmu dari warung terbaik secara real-time. Nikmati pengiriman cepat dan pelacakan pesanan instan.
+                      Pesan makanan & minuman favoritmu dari warung terbaik secara real-time. Pelacakan instan & manajemen warung terpadu.
                     </p>
                     <div className="flex flex-wrap gap-3 pt-2">
                       <button
                         onClick={() => { setAuthMode('register'); setShowAuthModal(true); }}
                         className="px-6 py-3.5 bg-white text-orange-600 font-black rounded-2xl shadow-lg hover:bg-orange-50 transition flex items-center gap-2"
                       >
-                        <UserPlus className="w-5 h-5" /> Daftar Akun Baru Sekarang
+                        <UserPlus className="w-5 h-5" /> Daftar Akun Baru
                       </button>
                       <button
                         onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}
                         className="px-6 py-3.5 bg-orange-700/80 hover:bg-orange-700 text-white font-black rounded-2xl shadow-lg transition flex items-center gap-2 border border-orange-400/40"
                       >
-                        <User className="w-5 h-5" /> Login Pelanggan / Warung
+                        <User className="w-5 h-5" /> Login Akun
                       </button>
                     </div>
                   </div>
@@ -786,12 +880,12 @@ export default function App() {
                     <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 text-center space-y-3">
                       <Store className="w-16 h-16 text-white mx-auto animate-pulse" />
                       <h3 className="text-lg font-bold">Mitra Warung & Pelanggan</h3>
-                      <p className="text-xs text-orange-100">Satu platform terintegrasi untuk pesan antar kuliner nusantara.</p>
+                      <p className="text-xs text-orange-100">Sinkronisasi database real-time antar perangkat.</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Landing Menu Catalog Section */}
+                {/* Landing Menu Catalog */}
                 <div className="space-y-4 pt-4">
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
@@ -815,7 +909,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Menu Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     {filteredMenu.map((item) => (
                       <div 
@@ -864,12 +957,158 @@ export default function App() {
               </div>
             )}
 
-            {/* 2. CUSTOMER VIEW (LOGGED IN AS PELANGGAN) */}
+            {/* 2. SUPERADMIN VIEW (LOGGED IN AS SUPERADMIN) */}
+            {currentUser && currentUser.email === 'order.bangben@gmail.com' && activeTab === 'superadmin' && (
+              <div className="space-y-8">
+                {/* Superadmin Header */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
+                  <div>
+                    <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Superadmin Pusat PesenDong
+                    </span>
+                    <h2 className="text-2xl font-black text-slate-800 mt-1">Dashboard Superadmin</h2>
+                    <p className="text-xs text-slate-500">Memantau seluruh warung, pelanggan, dan tagihan biaya jasa aplikasi real-time.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setShowSuperRegisterModal(true)}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow flex items-center gap-2 transition"
+                    >
+                      <UserPlus className="w-4 h-4" /> Registrasi User Baru
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stat Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Pelanggan</span>
+                    <h3 className="text-3xl font-black text-slate-800 mt-2">
+                      {usersList.filter(u => u.role === 'pelanggan').length}
+                    </h3>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Warung</span>
+                    <h3 className="text-3xl font-black text-orange-600 mt-2">
+                      {usersList.filter(u => u.role === 'warung').length}
+                    </h3>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Makanan Terorder</span>
+                    <h3 className="text-3xl font-black text-slate-800 mt-2">
+                      {calculateTotalFoodItems()} Item
+                    </h3>
+                  </div>
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pendapatan Jasa (Rp 500/item)</span>
+                    <h3 className="text-3xl font-black text-emerald-600 mt-2">
+                      Rp {totalPlatformFee.toLocaleString()}
+                    </h3>
+                  </div>
+                </div>
+
+                {/* SECTION A: Monitoring Users (Warung & Pelanggan) */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+                  <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-orange-600" /> Pemantauan User Terdaftar (Real-time Database)
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-bold">
+                        <tr>
+                          <th className="p-3 rounded-l-xl">Nama / Warung</th>
+                          <th className="p-3">Role / Peran</th>
+                          <th className="p-3">Kontak WhatsApp</th>
+                          <th className="p-3">Email</th>
+                          <th className="p-3">Alamat</th>
+                          <th className="p-3 rounded-r-xl text-center">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {usersList.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center py-8 text-slate-400">Belum ada user terdaftar.</td>
+                          </tr>
+                        ) : (
+                          usersList.map((u) => (
+                            <tr key={u.id} className="hover:bg-slate-50 transition">
+                              <td className="p-3 font-bold text-slate-800">{u.name}</td>
+                              <td className="p-3">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
+                                  u.role === 'warung' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {u.role}
+                                </span>
+                              </td>
+                              <td className="p-3 font-mono text-xs">{u.whatsappNumber}</td>
+                              <td className="p-3 text-xs text-slate-600">{u.email}</td>
+                              <td className="p-3 text-xs text-slate-600 max-w-xs truncate">{u.address || '-'}</td>
+                              <td className="p-3 text-center">
+                                {u.email !== 'order.bangben@gmail.com' && (
+                                  <button
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition"
+                                    title="Hapus User"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* SECTION B: Warung Fee & Billing Monitoring */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+                  <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-orange-600" /> Tagihan Biaya Jasa Aplikasi per Warung (Rp. 500 / Makanan)
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-[11px] font-bold">
+                        <tr>
+                          <th className="p-3 rounded-l-xl">Nama Warung</th>
+                          <th className="p-3">No. WhatsApp</th>
+                          <th className="p-3">Total Makanan Terorder</th>
+                          <th className="p-3 rounded-r-xl">Tagihan Jasa Aplikasi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {usersList.filter(u => u.role === 'warung').length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="text-center py-8 text-slate-400">Belum ada warung terdaftar.</td>
+                          </tr>
+                        ) : (
+                          usersList.filter(u => u.role === 'warung').map((w) => {
+                            // Calculate total items ordered across all orders
+                            const totalItemsWarung = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
+                            const warungFee = totalItemsWarung * 500;
+
+                            return (
+                              <tr key={w.id} className="hover:bg-slate-50 transition">
+                                <td className="p-3 font-bold text-slate-800">{w.name}</td>
+                                <td className="p-3 font-mono text-xs">{w.whatsappNumber}</td>
+                                <td className="p-3 text-xs">{totalItemsWarung} Item</td>
+                                <td className="p-3 font-black text-emerald-600">Rp {warungFee.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. CUSTOMER VIEW (LOGGED IN AS PELANGGAN) */}
             {currentUser && currentUser.role === 'pelanggan' && activeTab === 'customer' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Menu Catalog & Search */}
                 <div className="lg:col-span-2 space-y-6">
-                  {/* Hero Banner */}
                   <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
                     <div className="absolute right-0 bottom-0 opacity-15 translate-x-10 translate-y-10">
                       <ChefHat className="w-64 h-64" />
@@ -885,7 +1124,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Search and Category Filter */}
                   <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                     <div className="relative w-full sm:w-72">
                       <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
@@ -914,7 +1152,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Food Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {filteredMenu.length === 0 ? (
                       <div className="col-span-2 text-center py-12 bg-white rounded-2xl border border-slate-200">
@@ -997,7 +1234,6 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="space-y-6 mt-4">
-                        {/* Cart items list */}
                         <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                           {cart.map((item) => (
                             <div key={item.menuId} className="flex items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
@@ -1030,7 +1266,6 @@ export default function App() {
                           ))}
                         </div>
 
-                        {/* Customer Info Box */}
                         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3.5 space-y-1 text-xs">
                           <div className="flex justify-between font-bold text-orange-900">
                             <span>Pemesan: {currentUser.name}</span>
@@ -1054,7 +1289,6 @@ export default function App() {
                           <p className="text-slate-600">Alamat: {currentUser.address || 'Belum diisi (Klik Edit Profil)'}</p>
                         </div>
 
-                        {/* Payment Method */}
                         <div className="space-y-2">
                           <label className="block text-xs font-semibold text-slate-600">Metode Pembayaran</label>
                           <div className="grid grid-cols-2 gap-2">
@@ -1089,7 +1323,6 @@ export default function App() {
                           )}
                         </div>
 
-                        {/* Summary calculation */}
                         <div className="space-y-1.5 pt-3 border-t border-slate-100 text-xs">
                           <div className="flex justify-between text-slate-600">
                             <span>Subtotal</span>
@@ -1192,7 +1425,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Timeline stepper */}
                     <div className="py-4">
                       <div className="grid grid-cols-3 gap-2 relative">
                         {[
@@ -1222,7 +1454,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Order detail breakdown */}
                     <div className="bg-slate-50 rounded-2xl p-4 space-y-3 text-sm">
                       <div className="flex justify-between text-xs text-slate-500 pb-2 border-b border-slate-200">
                         <span>Nama Pemesan: <strong className="text-slate-800">{trackedOrder.customerName}</strong></span>
@@ -1259,8 +1490,8 @@ export default function App() {
               </div>
             )}
 
-            {/* 3. WARUNG VIEW (LOGGED IN AS WARUNG) */}
-            {currentUser && currentUser.role === 'warung' && activeTab === 'warung' && (
+            {/* 4. WARUNG VIEW (LOGGED IN AS WARUNG) */}
+            {currentUser && currentUser.role === 'warung' && currentUser.email !== 'order.bangben@gmail.com' && activeTab === 'warung' && (
               <div className="space-y-8">
                 {/* Warung Header */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
@@ -1293,6 +1524,21 @@ export default function App() {
                     >
                       <LogOut className="w-4 h-4" /> Keluar
                     </button>
+                  </div>
+                </div>
+
+                {/* Warung Platform Fee / Tagihan Jasa Aplikasi Card */}
+                <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl flex flex-wrap justify-between items-center gap-6">
+                  <div className="space-y-1">
+                    <span className="bg-orange-500/30 text-orange-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                      Tagihan Biaya Jasa Aplikasi Superadmin
+                    </span>
+                    <h3 className="text-2xl font-black mt-2">Rp {(orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0) * 500).toLocaleString()}</h3>
+                    <p className="text-xs text-slate-400">Tarif Jasa: Rp. 500 per makanan/minuman yang di-order pelanggan.</p>
+                  </div>
+                  <div className="bg-white/10 p-4 rounded-2xl border border-white/15 text-right">
+                    <p className="text-xs text-slate-300">Total Item Terjual</p>
+                    <p className="text-xl font-bold text-amber-400">{orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)} Item</p>
                   </div>
                 </div>
 
@@ -1497,7 +1743,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Menu table */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {menuItems.map((item) => (
                       <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4 items-center">
@@ -1535,13 +1780,13 @@ export default function App() {
               </div>
             )}
 
-            {/* 4. REPORTS TAB (WARUNG ONLY) */}
-            {currentUser && currentUser.role === 'warung' && activeTab === 'reports' && (
+            {/* 5. REPORTS TAB (SUPERADMIN ONLY) */}
+            {currentUser && currentUser.email === 'order.bangben@gmail.com' && activeTab === 'reports' && (
               <div className="space-y-6">
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-wrap justify-between items-center gap-4">
                   <div>
-                    <h2 className="text-2xl font-black text-slate-800">Laporan Penjualan Harian</h2>
-                    <p className="text-slate-500 text-xs mt-1">Unduh laporan transaksi pesanan yang telah selesai dalam format Excel atau CSV.</p>
+                    <h2 className="text-2xl font-black text-slate-800">Laporan Penjualan & Biaya Jasa Aplikasi</h2>
+                    <p className="text-slate-500 text-xs mt-1">Unduh laporan transaksi pesanan dan tagihan platform dalam format Excel atau CSV.</p>
                   </div>
                   <div className="flex gap-2">
                     <button 
@@ -1559,7 +1804,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Stat Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Pesanan Selesai</span>
@@ -1568,18 +1812,19 @@ export default function App() {
                     </h3>
                   </div>
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pendapatan Total Selesai</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Pendapatan Warung</span>
                     <h3 className="text-3xl font-black text-orange-600 mt-2">
                       Rp {orders.filter(o => o.status === 'Selesai').reduce((sum, o) => sum + o.totalAmount, 0).toLocaleString()}
                     </h3>
                   </div>
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Semua Pesanan Masuk</span>
-                    <h3 className="text-3xl font-black text-slate-800 mt-2">{orders.length}</h3>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Biaya Jasa Superadmin</span>
+                    <h3 className="text-3xl font-black text-emerald-600 mt-2">
+                      Rp {totalPlatformFee.toLocaleString()}
+                    </h3>
                   </div>
                 </div>
 
-                {/* Completed Orders Table */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
                   <h3 className="text-lg font-black text-slate-800">Riwayat Pesanan Selesai (Siap Export)</h3>
                   <div className="overflow-x-auto">
@@ -1590,7 +1835,7 @@ export default function App() {
                           <th className="p-3">Pelanggan</th>
                           <th className="p-3">Alamat</th>
                           <th className="p-3">Total</th>
-                          <th className="p-3">Metode & Status Bayar</th>
+                          <th className="p-3">Biaya Jasa (Rp 500/item)</th>
                           <th className="p-3 rounded-r-xl">Waktu Selesai</th>
                         </tr>
                       </thead>
@@ -1609,10 +1854,7 @@ export default function App() {
                               </td>
                               <td className="p-3 text-xs text-slate-600 max-w-xs truncate">{o.deliveryAddress}</td>
                               <td className="p-3 font-bold text-slate-800">Rp {o.totalAmount.toLocaleString()}</td>
-                              <td className="p-3 text-xs">
-                                <div>{o.paymentMethod}</div>
-                                <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">{o.paymentStatus}</span>
-                              </td>
+                              <td className="p-3 font-bold text-emerald-600">Rp {(o.items.reduce((s, i) => s + i.quantity, 0) * 500).toLocaleString()}</td>
                               <td className="p-3 text-xs text-slate-500">{new Date(o.createdAt).toLocaleString('id-ID')}</td>
                             </tr>
                           ))
@@ -1659,34 +1901,35 @@ export default function App() {
             </div>
 
             <form onSubmit={handleAuthSubmit} className="space-y-3">
-              {/* Role Selection */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Role / Peran *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAuthRole('pelanggan')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                      authRole === 'pelanggan'
-                        ? 'bg-orange-50 border-orange-500 text-orange-700'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <User className="w-4 h-4" /> Pelanggan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthRole('warung')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                      authRole === 'warung'
-                        ? 'bg-orange-50 border-orange-500 text-orange-700'
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <Store className="w-4 h-4" /> Warung
-                  </button>
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Role / Peran *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthRole('pelanggan')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                        authRole === 'pelanggan'
+                          ? 'bg-orange-50 border-orange-500 text-orange-700'
+                          : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <User className="w-4 h-4" /> Pelanggan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAuthRole('warung')}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                        authRole === 'warung'
+                          ? 'bg-orange-50 border-orange-500 text-orange-700'
+                          : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <Store className="w-4 h-4" /> Warung
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {authMode === 'register' && (
                 <>
@@ -1762,13 +2005,125 @@ export default function App() {
         </div>
       )}
 
+      {/* Superadmin Manual User Register Modal */}
+      {showSuperRegisterModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-orange-600" /> Registrasi User Baru (Superadmin)
+              </h3>
+              <button onClick={() => setShowSuperRegisterModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSuperRegister} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Role *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSuperRegForm({ ...superRegForm, role: 'pelanggan' })}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                      superRegForm.role === 'pelanggan' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Pelanggan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSuperRegForm({ ...superRegForm, role: 'warung' })}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
+                      superRegForm.role === 'warung' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Warung
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Nama *</label>
+                <input 
+                  type="text"
+                  required
+                  value={superRegForm.name}
+                  onChange={(e) => setSuperRegForm({ ...superRegForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">No. WhatsApp Aktif *</label>
+                <input 
+                  type="tel"
+                  required
+                  value={superRegForm.whatsappNumber}
+                  onChange={(e) => setSuperRegForm({ ...superRegForm, whatsappNumber: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Email *</label>
+                <input 
+                  type="email"
+                  required
+                  value={superRegForm.email}
+                  onChange={(e) => setSuperRegForm({ ...superRegForm, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Password *</label>
+                <input 
+                  type="password"
+                  required
+                  value={superRegForm.password}
+                  onChange={(e) => setSuperRegForm({ ...superRegForm, password: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat</label>
+                <textarea 
+                  rows={2}
+                  value={superRegForm.address}
+                  onChange={(e) => setSuperRegForm({ ...superRegForm, address: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <button 
+                  type="button"
+                  onClick={() => setShowSuperRegisterModal(false)}
+                  className="flex-1 py-2.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 py-2.5 bg-orange-600 text-white text-xs font-bold rounded-xl shadow"
+                >
+                  Daftarkan User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Profile Edit Modal */}
       {showProfileModal && currentUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-orange-600" /> Edit Profil ({currentUser.role === 'warung' ? 'Warung' : 'Pelanggan'})
+                <Settings className="w-5 h-5 text-orange-600" /> Edit Profil ({currentUser.email === 'order.bangben@gmail.com' ? 'Superadmin' : currentUser.role})
               </h3>
               <button onClick={() => setShowProfileModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
                 <XCircle className="w-6 h-6" />
