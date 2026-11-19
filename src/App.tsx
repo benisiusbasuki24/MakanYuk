@@ -482,6 +482,10 @@ export default function App() {
     });
   };
 
+  const updateCartItemNotes = (menuId: string, notes: string) => {
+    setCart(prevCart => prevCart.map(ci => ci.menuId === menuId ? { ...ci, notes } : ci));
+  };
+
   const removeFromCart = (menuId: string) => {
     setCart(prevCart => prevCart.filter(ci => ci.menuId !== menuId));
   };
@@ -542,7 +546,7 @@ export default function App() {
         `No. WA: *${currentUser.whatsappNumber}*\n` +
         `Alamat: *${currentUser.address}*\n\n` +
         `Pesanan:\n` +
-        cart.map(i => `- ${i.name} x${i.quantity} (Rp ${(i.price * i.quantity).toLocaleString()})`).join('\n') +
+        cart.map(i => `- ${i.name} x${i.quantity} (Rp ${(i.price * i.quantity).toLocaleString()})${i.notes ? `\n  Catatan: _${i.notes}_` : ''}`).join('\n') +
         `\n\nTotal: *Rp ${grandTotal.toLocaleString()}*\n` +
         `Metode Pembayaran: *${paymentMethod}*\n\n` +
         `Mohon segera diproses ya Kak. Terima kasih!`
@@ -1339,31 +1343,42 @@ export default function App() {
                         <div className="space-y-6 mt-4">
                           <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                             {cart.map((item) => (
-                              <div key={item.menuId} className="flex items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                <div className="flex-1">
-                                  <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{item.name}</h4>
-                                  <span className="text-xs text-orange-600 font-semibold">Rp {(item.price * item.quantity).toLocaleString()}</span>
+                              <div key={item.menuId} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex-1">
+                                    <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{item.name}</h4>
+                                    <span className="text-xs text-orange-600 font-semibold">Rp {(item.price * item.quantity).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button 
+                                      onClick={() => updateCartQuantity(item.menuId, -1)}
+                                      className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </button>
+                                    <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                                    <button 
+                                      onClick={() => updateCartQuantity(item.menuId, 1)}
+                                      className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                      onClick={() => removeFromCart(item.menuId)}
+                                      className="text-red-500 hover:text-red-700 ml-1 p-1"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <button 
-                                    onClick={() => updateCartQuantity(item.menuId, -1)}
-                                    className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
-                                  >
-                                    <Minus className="w-3 h-3" />
-                                  </button>
-                                  <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
-                                  <button 
-                                    onClick={() => updateCartQuantity(item.menuId, 1)}
-                                    className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </button>
-                                  <button 
-                                    onClick={() => removeFromCart(item.menuId)}
-                                    className="text-red-500 hover:text-red-700 ml-1 p-1"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                <div>
+                                  <input 
+                                    type="text"
+                                    placeholder="Catatan khusus (cth: tidak pakai pedas...)"
+                                    value={item.notes || ''}
+                                    onChange={(e) => updateCartItemNotes(item.menuId, e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-600 placeholder:text-slate-400"
+                                  />
                                 </div>
                               </div>
                             ))}
@@ -1708,12 +1723,19 @@ export default function App() {
 
                           <div className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
                             <p className="font-bold text-slate-700 text-[11px]">Rincian Pesanan:</p>
-                            {o.items.map((i, idx) => (
-                              <div key={idx} className="flex justify-between text-slate-600">
-                                <span>- {i.name}</span>
-                                <span className="font-bold">x{i.quantity}</span>
-                              </div>
-                            ))}
+                             {o.items.map((i, idx) => (
+                               <div key={idx} className="text-slate-600">
+                                 <div className="flex justify-between">
+                                   <span>- {i.name}</span>
+                                   <span className="font-bold">x{i.quantity}</span>
+                                 </div>
+                                 {i.notes && (
+                                   <p className="text-[11px] text-orange-700 bg-orange-50 px-2 py-0.5 rounded mt-0.5 italic">
+                                     Catatan: {i.notes}
+                                   </p>
+                                 )}
+                               </div>
+                             ))}
                           </div>
 
                           <div className="flex justify-between items-center pt-2 border-t border-slate-200">
@@ -1781,7 +1803,14 @@ export default function App() {
                               </td>
                               <td className="p-3 text-xs">
                                 {o.items.map((i, idx) => (
-                                  <div key={idx}>- {i.name} ({i.quantity}x)</div>
+                                  <div key={idx} className="mb-1">
+                                    <div>- {i.name} ({i.quantity}x)</div>
+                                    {i.notes && (
+                                      <div className="text-[10px] text-orange-700 bg-orange-50 px-2 py-0.5 rounded italic mt-0.5">
+                                        Catatan: {i.notes}
+                                      </div>
+                                    )}
+                                  </div>
                                 ))}
                               </td>
                               <td className="p-3">
