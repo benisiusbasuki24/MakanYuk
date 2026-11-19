@@ -59,6 +59,7 @@ export interface UserAccount {
   password?: string;
   role: 'pelanggan' | 'warung' | 'superadmin';
   address: string;
+  warungName?: string;
   createdAt: string;
 }
 
@@ -165,6 +166,7 @@ export default function App() {
     whatsappNumber: '',
     email: '',
     address: '',
+    warungName: '',
     password: ''
   });
 
@@ -427,6 +429,7 @@ export default function App() {
         whatsappNumber: profileForm.whatsappNumber.trim(),
         email: profileForm.email.trim(),
         address: profileForm.address.trim(),
+        warungName: currentUser.role === 'warung' || currentUser.email === 'order.bangben@gmail.com' ? (profileForm.warungName.trim() || currentUser.warungName || currentUser.name) : (currentUser.warungName || ''),
         password: profileForm.password ? profileForm.password : currentUser.password
       };
 
@@ -501,6 +504,7 @@ export default function App() {
         whatsappNumber: currentUser.whatsappNumber || '',
         email: currentUser.email,
         address: currentUser.address || '',
+        warungName: currentUser.warungName || currentUser.name,
         password: ''
       });
       return;
@@ -831,6 +835,7 @@ export default function App() {
                         whatsappNumber: currentUser.whatsappNumber,
                         email: currentUser.email,
                         address: currentUser.address,
+                        warungName: currentUser.warungName || currentUser.name,
                         password: ''
                       });
                       setShowProfileModal(true);
@@ -1372,6 +1377,7 @@ export default function App() {
                                     whatsappNumber: currentUser.whatsappNumber,
                                     email: currentUser.email,
                                     address: currentUser.address,
+                                    warungName: currentUser.warungName || currentUser.name,
                                     password: ''
                                   });
                                   setShowProfileModal(true);
@@ -1606,6 +1612,7 @@ export default function App() {
                           whatsappNumber: currentUser.whatsappNumber,
                           email: currentUser.email,
                           address: currentUser.address,
+                          warungName: currentUser.warungName || currentUser.name,
                           password: ''
                         });
                         setShowProfileModal(true);
@@ -2185,6 +2192,21 @@ export default function App() {
                   className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
+
+              {(currentUser.role === 'warung' || currentUser.email === 'order.bangben@gmail.com') && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Warung (Tampil ke Pelanggan) *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="Cth: Warung Nasi Berkah Ilahi"
+                    value={profileForm.warungName}
+                    onChange={(e) => setProfileForm({ ...profileForm, warungName: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold text-orange-600"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Nama warung ini akan ditampilkan kepada pelanggan di daftar warung dan menu.</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Alamat / Lokasi</label>
