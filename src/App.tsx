@@ -21,8 +21,9 @@ export interface MenuItem {
   id: string;
   name: string;
   category: 'Makanan' | 'Minuman';
-  warungCategory?: string; // e.g. 'Warung Nasi', 'Bakso & Mie', 'Aneka Sate', 'Minuman & Jus'
-  warungName?: string; // name of the warung offering this menu
+  warungCategory?: string;
+  warungName?: string;
+  warungId?: string;
   price: number;
   description: string;
   imageUrl: string;
@@ -603,7 +604,8 @@ export default function App() {
         name: newMenuForm.name,
         category: newMenuForm.category,
         warungCategory: newMenuForm.warungCategory || 'Warung Nasi',
-        warungName: currentUser?.name || 'Warung Saya',
+        warungName: currentUser?.warungName || currentUser?.name || 'Warung Saya',
+        warungId: currentUser?.id || '',
         price: Number(newMenuForm.price),
         description: newMenuForm.description,
         imageUrl: newMenuForm.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
@@ -1859,37 +1861,41 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {menuItems.map((item) => (
-                      <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4 items-center">
-                        <img 
-                          src={item.imageUrl} 
-                          alt={item.name} 
-                          className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-200"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">{item.warungCategory || 'Warung Nasi'}</span>
-                          <h4 className="font-bold text-sm text-slate-800 truncate mt-0.5">{item.name}</h4>
-                          <p className="text-xs text-orange-600 font-black">Rp {item.price.toLocaleString()}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <button 
-                              onClick={() => startEditMenu(item)}
-                              className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
-                            >
-                              <Edit className="w-3 h-3" /> Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteMenu(item.id)}
-                              className="px-2.5 py-1 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-100 flex items-center gap-1"
-                            >
-                              <Trash2 className="w-3 h-3" /> Hapus
-                            </button>
+                    {menuItems.filter(item => item.warungId === currentUser?.id || item.warungName === currentUser?.warungName || item.warungName === currentUser?.name).length === 0 ? (
+                      <div className="col-span-3 text-center py-8 text-slate-400 text-sm">Belum ada menu yang Anda buat. Silakan tambahkan menu baru.</div>
+                    ) : (
+                      menuItems.filter(item => item.warungId === currentUser?.id || item.warungName === currentUser?.warungName || item.warungName === currentUser?.name).map((item) => (
+                        <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4 items-center">
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name} 
+                            className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">{item.warungCategory || 'Warung Nasi'}</span>
+                            <h4 className="font-bold text-sm text-slate-800 truncate mt-0.5">{item.name}</h4>
+                            <p className="text-xs text-orange-600 font-black">Rp {item.price.toLocaleString()}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <button 
+                                onClick={() => startEditMenu(item)}
+                                className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                              >
+                                <Edit className="w-3 h-3" /> Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteMenu(item.id)}
+                                className="px-2.5 py-1 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-100 flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Hapus
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
